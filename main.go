@@ -27,7 +27,7 @@ func main() {
 	defer tempfile.DeleteAll()
 
 	log.SetOutput(os.Stdout)
-	log.SetPrefix("[deployer] ")
+	log.SetPrefix("[deployer2] ")
 
 	var (
 		optManifest   string
@@ -72,8 +72,10 @@ func main() {
 	}
 	imageNames = append(imageNames, optImage+":"+optProfile)
 
+	log.Println("------------ deployer2 ------------")
+
 	var m Manifest
-	log.Printf("载入清单文件: %s", optManifest)
+	log.Printf("清单文件: %s", optManifest)
 	if m, err = LoadManifestFile(optManifest); err != nil {
 		return
 	}
@@ -86,13 +88,13 @@ func main() {
 	log.Printf("写入构建文件: %s", fileBuild)
 	log.Printf("写入打包文件: %s", filePackage)
 
-	log.Println("执行构建流程")
+	log.Println("------------ 构建 ------------")
 	if err = Execute(fileBuild); err != nil {
 		return
 	}
 	log.Println("构建完成")
 
-	log.Println("执行打包流程")
+	log.Println("------------ 打包 ------------")
 	if err = ExecuteDockerBuild(filePackage, imageNames.Primary()); err != nil {
 		return
 	}
@@ -109,7 +111,7 @@ func main() {
 
 	// 执行推送/部署流程
 	for _, workload := range optWorkloads {
-		log.Printf("准备部署到: %s", workload.String())
+		log.Printf("------------ 部署 [%s] ------------", workload.String())
 
 		var s Preset
 		if s, err = LoadPreset(workload.Cluster); err != nil {
