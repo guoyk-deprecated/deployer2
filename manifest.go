@@ -122,8 +122,9 @@ func LoadManifestFile(file string) (m Manifest, err error) {
 }
 
 func (m Manifest) Profile(name string) *Profile {
-	p := &Profile{Profile: name}
+	p := &Profile{}
 	*p = m.Profiles[name]
+	p.Profile = name
 	p.Apply(m.Default)
 	return p
 }
