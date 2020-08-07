@@ -193,7 +193,7 @@ func main() {
 			return
 		}
 
-		if err = ExecuteKubectlPatch(fileKubeconfig, workload.Namespace, workload.Namespace, workload.Type, string(buf)); err != nil {
+		if err = ExecuteKubectlPatch(fileKubeconfig, workload.Namespace, workload.Name, workload.Type, string(buf)); err != nil {
 			return
 		}
 	}
