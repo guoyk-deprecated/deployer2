@@ -14,10 +14,10 @@ import (
 
 func exit(err *error) {
 	if *err != nil {
-		log.Println("exited with error:", (*err).Error())
+		log.Println("错误退出:", (*err).Error())
 		os.Exit(1)
 	} else {
-		log.Println("exited")
+		log.Println("正常退出")
 	}
 }
 
