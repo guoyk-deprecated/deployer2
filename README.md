@@ -4,6 +4,8 @@
 
 ## 从一代迁移到二代
 
+* 只支持 `deployer.yml`，不再支持 `docker-build.xxx.sh` 和 `Dockerfile.xxx`
+
 * 修改 `deployer.yml`
 
     ```yaml
@@ -28,11 +30,13 @@
    
    * 可用的模板函数，参考 https://github.com/guoyk93/tmplfuncs
    
-* 修改构建命令
+* 修改构建命令(现在支持多工作负载发布)
 
   ```shell script
   deployer2 --workload test-qcloud/some-namespace/deployment/some-workload \
-            --workload test-qcloud/another-namespace/deployment/another-workload
+            --workload test-qcloud/another-namespace/deployment/another-workload \
+            --mem 256:2000 \
+            --cpu 50:2000
   # workload 格式 "集群名/命名空间/类型/工作负载名"
   ```
 
