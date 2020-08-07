@@ -17,6 +17,7 @@ const (
 )
 
 type Profile struct {
+	Profile string                 `yaml:"-"`
 	Build   []string               `yaml:"build"`
 	Package []string               `yaml:"package"`
 	Vars    map[string]interface{} `yaml:"vars"`
@@ -55,8 +56,9 @@ func (p *Profile) Render(src string) (out []byte, err error) {
 		}
 	}
 	data := map[string]interface{}{
-		"Env":  envs,
-		"Vars": p.Vars,
+		"Env":     envs,
+		"Vars":    p.Vars,
+		"Profile": p.Profile,
 	}
 
 	buf := &bytes.Buffer{}
@@ -120,7 +122,7 @@ func LoadManifestFile(file string) (m Manifest, err error) {
 }
 
 func (m Manifest) Profile(name string) *Profile {
-	p := &Profile{}
+	p := &Profile{Profile: name}
 	*p = m.Profiles[name]
 	p.Apply(m.Default)
 	return p
