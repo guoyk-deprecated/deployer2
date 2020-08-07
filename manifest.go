@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"github.com/guoyk93/tempfile"
 	"github.com/guoyk93/tmplfuncs"
 	"gopkg.in/yaml.v3"
 	"io/ioutil"
@@ -78,6 +79,23 @@ func (p *Profile) GenerateBuild() ([]byte, error) {
 
 func (p *Profile) GeneratePackage() ([]byte, error) {
 	return p.Render(strings.Join(p.Package, "\n"))
+}
+
+func (p *Profile) GenerateFiles() (buildFile string, packageFile string, err error) {
+	var buf []byte
+	if buf, err = p.GenerateBuild(); err != nil {
+		return
+	}
+	if buildFile, err = tempfile.WriteFile(buf, "deployer-build", ".sh", true); err != nil {
+		return
+	}
+	if buf, err = p.GeneratePackage(); err != nil {
+		return
+	}
+	if packageFile, err = tempfile.WriteFile(buf, "deployer-package", ".dockerfile", false); err != nil {
+		return
+	}
+	return
 }
 
 type Manifest struct {

@@ -13,6 +13,9 @@ var (
 		"statefulset",
 		"daemonset",
 		"cronjob",
+		"deploy",
+		"ds",
+		"sts",
 	}
 )
 
@@ -37,15 +40,28 @@ type WorkloadOption struct {
 	Namespace string
 	Type      string
 	Name      string
+	Container string
+	IsInit    bool
 }
 
 func (w WorkloadOption) String() string {
-	return w.Cluster + "/" + w.Name + "/" + w.Type + "/" + w.Name
+	sb := &strings.Builder{}
+	sb.WriteString(w.Cluster)
+	sb.WriteRune('/')
+	sb.WriteString(w.Namespace)
+	sb.WriteRune('/')
+	sb.WriteString(w.Name)
+	sb.WriteRune('/')
+	sb.WriteString(w.Container)
+	if w.IsInit {
+		sb.WriteRune('!')
+	}
+	return sb.String()
 }
 
 func (w *WorkloadOption) Set(s string) error {
 	splits := strings.Split(s, "/")
-	if len(splits) != 4 {
+	if len(splits) != 4 && len(splits) != 5 {
 		return errors.New("目标工作负载参数格式不正确")
 	}
 	w.Cluster,
@@ -55,6 +71,13 @@ func (w *WorkloadOption) Set(s string) error {
 		convertName(splits[1]),
 		convertName(splits[2]),
 		convertName(splits[3])
+	if len(splits) == 5 {
+		w.Container = convertName(splits[4])
+	} else {
+		w.Container = w.Name
+	}
+	w.IsInit = strings.HasSuffix(w.Container, "!")
+	w.Container = strings.TrimSuffix(w.Container, "!")
 	for _, kt := range knownWorkloadTypes {
 		if kt == w.Type {
 			return nil
@@ -89,6 +112,10 @@ func (ws *WorkloadOptions) Set(s string) error {
 type LimitOption struct {
 	Min int64
 	Max int64
+}
+
+func (l LimitOption) IsZero() bool {
+	return l.Min == 0 && l.Max == 0
 }
 
 func (l LimitOption) String() string {

@@ -1,5 +1,8 @@
 # github.com/davecgh/go-spew v1.1.0
 github.com/davecgh/go-spew/spew
+# github.com/guoyk93/tempfile v1.0.0
+## explicit
+github.com/guoyk93/tempfile
 # github.com/guoyk93/tmplfuncs v1.0.1
 ## explicit
 github.com/guoyk93/tmplfuncs
