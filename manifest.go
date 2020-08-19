@@ -7,6 +7,7 @@ import (
 	"github.com/guoyk93/tmplfuncs"
 	"gopkg.in/yaml.v3"
 	"io/ioutil"
+	"log"
 	"os"
 	"strings"
 	"text/template"
@@ -88,12 +89,14 @@ func (p *Profile) GenerateFiles() (buildFile string, packageFile string, err err
 	if buf, err = p.GenerateBuild(); err != nil {
 		return
 	}
+	log.Printf("构建脚本:\n%s", buf)
 	if buildFile, err = tempfile.WriteFile(buf, "deployer-build", ".sh", true); err != nil {
 		return
 	}
 	if buf, err = p.GeneratePackage(); err != nil {
 		return
 	}
+	log.Printf("打包脚本:\n%s", buf)
 	if packageFile, err = tempfile.WriteFile(buf, "deployer-package", ".dockerfile", false); err != nil {
 		return
 	}
