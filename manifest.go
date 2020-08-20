@@ -90,8 +90,7 @@ func (p *Profile) GenerateFiles() (buildFile string, packageFile string, err err
 		return
 	}
 	log.Println("构建脚本:")
-	log.Println("--------------------------------------------------")
-	log.Println(string(buf))
+	log.Println("--------------------------------------------------\n" + string(buf))
 	log.Println("--------------------------------------------------")
 	if buildFile, err = tempfile.WriteFile(buf, "deployer-build", ".sh", true); err != nil {
 		return
@@ -100,8 +99,7 @@ func (p *Profile) GenerateFiles() (buildFile string, packageFile string, err err
 		return
 	}
 	log.Println("打包脚本:")
-	log.Println("--------------------------------------------------")
-	log.Println(string(buf))
+	log.Println("--------------------------------------------------\n" + string(buf))
 	log.Println("--------------------------------------------------")
 	if packageFile, err = tempfile.WriteFile(buf, "deployer-package", ".dockerfile", false); err != nil {
 		return
