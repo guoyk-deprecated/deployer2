@@ -85,8 +85,7 @@ func (p *Profile) GeneratePackage() ([]byte, error) {
 }
 
 func (p *Profile) PrintGeneratedContent(name string, content string) {
-	log.Println(name + ":")
-	log.Println("--------------------------------------------------\n" + content)
+	log.Println(name + ": --------------------------------------------------\n" + strings.TrimSpace(content))
 	log.Println("--------------------------------------------------")
 	if strings.Contains(content, "<no value>") {
 		log.Println("警告：检查到渲染结果出现 <no value>，请确认：")
