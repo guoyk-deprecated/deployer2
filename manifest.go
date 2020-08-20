@@ -84,23 +84,30 @@ func (p *Profile) GeneratePackage() ([]byte, error) {
 	return p.Render(strings.Join(p.Package, "\n"))
 }
 
+func (p *Profile) PrintGeneratedContent(name string, content string) {
+	log.Println(name + ":")
+	log.Println("--------------------------------------------------\n" + content)
+	log.Println("--------------------------------------------------")
+	if strings.Contains(content, "<no value>") {
+		log.Println("警告：检查到渲染结果出现 <no value>，请确认：")
+		log.Printf("  1. 环境名 %s 是否正确 (环境名可能取自 Jenkins 任务后缀)", p.Profile)
+		log.Printf("  2. 环境 %s 的 vars 字段是否缺失某些变量", p.Profile)
+	}
+}
+
 func (p *Profile) GenerateFiles() (buildFile string, packageFile string, err error) {
 	var buf []byte
 	if buf, err = p.GenerateBuild(); err != nil {
 		return
 	}
-	log.Println("构建脚本:")
-	log.Println("--------------------------------------------------\n" + string(buf))
-	log.Println("--------------------------------------------------")
+	p.PrintGeneratedContent("构建脚本", string(buf))
 	if buildFile, err = tempfile.WriteFile(buf, "deployer-build", ".sh", true); err != nil {
 		return
 	}
 	if buf, err = p.GeneratePackage(); err != nil {
 		return
 	}
-	log.Println("打包脚本:")
-	log.Println("--------------------------------------------------\n" + string(buf))
-	log.Println("--------------------------------------------------")
+	p.PrintGeneratedContent("打包脚本", string(buf))
 	if packageFile, err = tempfile.WriteFile(buf, "deployer-package", ".dockerfile", false); err != nil {
 		return
 	}
