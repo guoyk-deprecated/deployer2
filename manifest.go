@@ -85,8 +85,12 @@ func (p *Profile) GeneratePackage() ([]byte, error) {
 }
 
 func (p *Profile) PrintGeneratedContent(name string, content string) {
-	log.Println(name + ": --------------------------------------------------\n" + strings.TrimSpace(content))
-	log.Println("--------------------------------------------------")
+	sb := &strings.Builder{}
+	sb.WriteString(name)
+	sb.WriteString(":\n--------------------------------------------------\n")
+	sb.WriteString(strings.TrimSpace(content))
+	sb.WriteString("\n--------------------------------------------------")
+	log.Println(sb.String())
 	if strings.Contains(content, "<no value>") {
 		log.Println("警告：检查到渲染结果出现 <no value>，请确认：")
 		log.Printf("  1. 环境名 %s 是否正确 (环境名可能取自 Jenkins 任务后缀)", p.Profile)
