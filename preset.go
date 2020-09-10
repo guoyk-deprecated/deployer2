@@ -17,6 +17,7 @@ type Preset struct {
 	LimitsMEM        string                 `yaml:"limitsMEM"`
 	RequestsCPU      string                 `yaml:"requestsCPU"`
 	RequestsMEM      string                 `yaml:"requestsMEM"`
+	ExtraAnnotations map[string]string      `yaml:"extra_annotations"`
 	Kubeconfig       map[string]interface{} `yaml:"kubeconfig"`
 	Dockerconfig     *struct {
 		Auths map[string]map[string]string `json:"auths" yaml:"auths"`

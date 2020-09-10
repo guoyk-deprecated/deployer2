@@ -3,6 +3,9 @@ package main
 import "path"
 
 type Patch struct {
+	Metadata struct {
+		Annotations map[string]string `json:"annotations,omitempty"`
+	} `json:"metadata,omitempty"`
 	Spec struct {
 		Template struct {
 			Metadata struct {

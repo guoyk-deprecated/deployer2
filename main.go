@@ -115,6 +115,9 @@ func main() {
 
 		var s Preset
 		if s, err = LoadPreset(workload.Cluster); err != nil {
+			if os.IsNotExist(err) {
+				log.Printf("无法找到集群预置文件 %s, 请确认 --workload 参数是否正确", workload.Cluster)
+			}
 			return
 		}
 
@@ -157,6 +160,7 @@ func main() {
 
 		// 构建 Patch
 		var p Patch
+		p.Metadata.Annotations = s.ExtraAnnotations
 		p.Spec.Template.Metadata.Annotations.Timestamp = time.Now().Format(time.RFC3339)
 		for _, name := range s.ImagePullSecrets {
 			secret := PatchImagePullSecret{Name: strings.TrimSpace(name)}
