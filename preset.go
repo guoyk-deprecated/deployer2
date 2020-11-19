@@ -17,7 +17,11 @@ type Preset struct {
 	ImagePullSecrets []string               `yaml:"imagePullSecrets"`
 	Resource         UniversalResourceList  `yaml:"resource"`
 	Kubeconfig       map[string]interface{} `yaml:"kubeconfig"`
-	Dockerconfig     map[string]interface{} `yaml:"dockerconfig"`
+	Dockerconfig     struct {
+		Auths map[string]struct {
+			Auth string `json:"auth"`
+		} `json:"auths"`
+	} `yaml:"dockerconfig"`
 }
 
 func LoadPresetFromHome(cluster string, p *Preset) (err error) {
@@ -61,9 +65,6 @@ func (p Preset) GenerateKubeconfig() []byte {
 }
 
 func (p Preset) GenerateDockerconfig() []byte {
-	if p.Dockerconfig == nil {
-		return []byte("{}")
-	}
 	buf, err := json.Marshal(p.Dockerconfig)
 	if err != nil {
 		panic(err)
