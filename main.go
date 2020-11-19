@@ -168,7 +168,7 @@ func main() {
 
 		// 执行 kubectl patch 命令，更新工作负载
 		var buf []byte
-		if buf, err = json.MarshalIndent(patch, "", "  "); err != nil {
+		if buf, err = json.Marshal(patch); err != nil {
 			return
 		}
 		if err = cmds.KubectlPatch(kcFile, workload.Namespace, workload.Name, workload.Type, string(buf)); err != nil {
