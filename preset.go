@@ -72,7 +72,7 @@ func (p Preset) GenerateDockerconfig() []byte {
 	return buf
 }
 
-func (p Preset) GenerateFiles() (kcFile string, dcDir string, err error) {
+func (p Preset) GenerateFiles() (dcDir string, kcFile string, err error) {
 	var dcFile string
 	if dcDir, dcFile, err = tempfile.WriteDirFile(
 		p.GenerateDockerconfig(),
