@@ -18,7 +18,7 @@ type Manifest struct {
 }
 
 func LoadManifest(buf []byte, m *Manifest) (err error) {
-	if err = yaml.Unmarshal(buf, m); err != nil {
+	if err = yaml.UnmarshalStrict(buf, m); err != nil {
 		return
 	}
 	if m.Version != ManifestVersion {
