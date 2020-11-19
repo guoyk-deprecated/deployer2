@@ -11,19 +11,22 @@ type UniversalPatch struct {
 	Metadata struct {
 		Annotations map[string]string `json:"annotations,omitempty"`
 	} `json:"metadata,omitempty"`
-	Spec corev1.PodTemplate `json:"spec,omitempty"`
+	Spec struct {
+		Template struct {
+			Metadata struct {
+				Annotations map[string]string `json:"annotations,omitempty"`
+			} `json:"metadata,omitempty"`
+			Spec corev1.PodSpec `json:"spec,omitempty"`
+		} `json:"template,omitempty"`
+	} `json:"spec,omitempty"`
 }
 
 func CreateUniversalPatch(preset *Preset, profile *Profile, workload *UniversalWorkload, imageName string) UniversalPatch {
 	var p UniversalPatch
 	p.Metadata.Annotations = preset.Annotations
-	if p.Metadata.Annotations == nil {
-		p.Metadata.Annotations = map[string]string{}
+	p.Spec.Template.Metadata.Annotations = map[string]string{
+		"net.guoyk.deployer/timestamp": time.Now().Format(time.RFC3339),
 	}
-	if p.Spec.Template.Annotations == nil {
-		p.Spec.Template.Annotations = map[string]string{}
-	}
-	p.Spec.Template.Annotations["net.guoyk.deployer/timestamp"] = time.Now().Format(time.RFC3339)
 	for _, name := range preset.ImagePullSecrets {
 		secret := corev1.LocalObjectReference{Name: strings.TrimSpace(name)}
 		p.Spec.Template.Spec.ImagePullSecrets = append(p.Spec.Template.Spec.ImagePullSecrets, secret)
