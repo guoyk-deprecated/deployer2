@@ -27,7 +27,7 @@ type UniversalCheck struct {
 	Timeout  int    `yaml:"timeout"`
 }
 
-func (c UniversalCheck) GenerateProbe() *corev1.Probe {
+func (c UniversalCheck) GenerateReadinessProbe() *corev1.Probe {
 	_ = mergo.Merge(&c, defaultUniversalCheck)
 	if c.Path == "" {
 		return nil
@@ -47,4 +47,13 @@ func (c UniversalCheck) GenerateProbe() *corev1.Probe {
 		},
 	}
 	return b
+}
+
+func (c UniversalCheck) GenerateLivenessProbe() *corev1.Probe {
+	p := c.GenerateReadinessProbe()
+	if p != nil {
+		// LivenessProbe 强制要求 SuccessThreshold = 1
+		p.SuccessThreshold = 1
+	}
+	return p
 }

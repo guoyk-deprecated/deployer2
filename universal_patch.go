@@ -70,10 +70,8 @@ func CreateUniversalPatch(preset *Preset, profile *Profile, workload *UniversalW
 			container.Resources.Requests[corev1.ResourceMemory],
 				container.Resources.Limits[corev1.ResourceMemory] = mem.AsMEM()
 		}
-		container.LivenessProbe = profile.Check.GenerateProbe()
-		// LivenessProbe 强制要求 Success 必须为 1
-		container.LivenessProbe.SuccessThreshold = 1
-		container.ReadinessProbe = profile.Check.GenerateProbe()
+		container.LivenessProbe = profile.Check.GenerateLivenessProbe()
+		container.ReadinessProbe = profile.Check.GenerateReadinessProbe()
 		p.Spec.Template.Spec.Containers = append(p.Spec.Template.Spec.Containers, container)
 	}
 	return p
