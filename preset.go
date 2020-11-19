@@ -15,13 +15,12 @@ type Preset struct {
 	Registry         string                 `yaml:"registry"`
 	Annotations      map[string]string      `yaml:"annotations"`
 	ImagePullSecrets []string               `yaml:"imagePullSecrets"`
-	CPU              *LimitOption           `yaml:"cpu"`
-	MEM              *LimitOption           `yaml:"mem"`
+	Resource         UniversalResourceList  `yaml:"resource"`
 	Kubeconfig       map[string]interface{} `yaml:"kubeconfig"`
 	Dockerconfig     map[string]interface{} `yaml:"dockerconfig"`
 }
 
-func LoadPreset(cluster string) (p Preset, err error) {
+func LoadPresetFromHome(cluster string, p *Preset) (err error) {
 	var home string
 	if home = os.Getenv("HOME"); len(home) == 0 {
 		err = errors.New("缺少环境变量 $HOME")
@@ -29,12 +28,25 @@ func LoadPreset(cluster string) (p Preset, err error) {
 	}
 	filename := filepath.Join(home, ".deployer2", "preset-"+cluster+".yml")
 	log.Printf("加载集群配置: %s", filename)
+	if err = LoadPresetFile(filename, p); err != nil {
+		return
+	}
+	return
+}
+
+func LoadPresetFile(filename string, p *Preset) (err error) {
 	var buf []byte
 	if buf, err = ioutil.ReadFile(filename); err != nil {
 		return
 	}
-	err = yaml.Unmarshal(buf, &p)
+	if err = LoadPreset(buf, p); err != nil {
+		return
+	}
 	return
+}
+
+func LoadPreset(buf []byte, p *Preset) error {
+	return yaml.Unmarshal(buf, p)
 }
 
 func (p Preset) GenerateKubeconfig() []byte {

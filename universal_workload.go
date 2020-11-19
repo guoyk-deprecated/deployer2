@@ -25,7 +25,8 @@ func sanitizeWorkloadName(s string) string {
 				"_", "-")))
 }
 
-type WorkloadOption struct {
+// UniversalWorkload 在多种工作负载类型下，引用其中固定的容器，默认容器名与工作负载名相等（Rancher 惯例）
+type UniversalWorkload struct {
 	Cluster   string
 	Namespace string
 	Type      string
@@ -34,7 +35,7 @@ type WorkloadOption struct {
 	IsInit    bool
 }
 
-func (w WorkloadOption) String() string {
+func (w UniversalWorkload) String() string {
 	sb := &strings.Builder{}
 	sb.WriteString(w.Cluster)
 	sb.WriteRune('/')
@@ -49,7 +50,7 @@ func (w WorkloadOption) String() string {
 	return sb.String()
 }
 
-func (w *WorkloadOption) Set(s string) error {
+func (w *UniversalWorkload) Set(s string) error {
 	splits := strings.Split(s, "/")
 	if len(splits) != 4 && len(splits) != 5 {
 		return errors.New("目标工作负载参数格式不正确")
@@ -76,9 +77,9 @@ func (w *WorkloadOption) Set(s string) error {
 	return errors.New("目标工作负载参数指定了未知的类型")
 }
 
-type WorkloadOptions []WorkloadOption
+type UniversalWorkloads []UniversalWorkload
 
-func (ws WorkloadOptions) String() string {
+func (ws UniversalWorkloads) String() string {
 	sb := &strings.Builder{}
 	for _, w := range ws {
 		if sb.Len() > 0 {
@@ -89,8 +90,8 @@ func (ws WorkloadOptions) String() string {
 	return sb.String()
 }
 
-func (ws *WorkloadOptions) Set(s string) error {
-	w := &WorkloadOption{}
+func (ws *UniversalWorkloads) Set(s string) error {
+	w := &UniversalWorkload{}
 	if err := w.Set(s); err != nil {
 		return err
 	} else {

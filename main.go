@@ -7,12 +7,9 @@ import (
 	"github.com/guoyk93/deployer2/pkg/cmds"
 	"github.com/guoyk93/deployer2/pkg/image_tracker"
 	"github.com/guoyk93/tempfile"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"log"
 	"os"
 	"strings"
-	"time"
 )
 
 func exit(err *error) {
@@ -36,9 +33,9 @@ func main() {
 		optManifest   string
 		optImage      string
 		optProfile    string
-		optWorkloads  WorkloadOptions
-		optCPU        LimitOption
-		optMEM        LimitOption
+		optWorkloads  UniversalWorkloads
+		optCPU        UniversalResource
+		optMEM        UniversalResource
 		optSkipDeploy bool
 
 		imageNames   ImageNames
@@ -54,7 +51,7 @@ func main() {
 	flag.Var(&optMEM, "mem", "指定 MEM 配额，格式为 \"MIN:MAX\"，单位为 Mi (兆字节)")
 	flag.Parse()
 
-	// 从 JOB_NAME 获取 image 和 profile 信息
+	// 从 $JOB_NAME 获取 image 和 profile 信息
 	if optImage == "" || optProfile == "" {
 		if jobNameSplits := strings.Split(os.Getenv("JOB_NAME"), "."); len(jobNameSplits) == 2 {
 			if optImage == "" {
@@ -69,7 +66,7 @@ func main() {
 		}
 	}
 
-	// 计算标签，第一个标签为主标签
+	// 从 $BUILD_NUMBER 决定标签
 	if buildNumber := os.Getenv("BUILD_NUMBER"); buildNumber != "" {
 		imageNames = append(imageNames, optImage+":"+optProfile+"-build-"+buildNumber)
 	}
@@ -77,60 +74,80 @@ func main() {
 
 	log.Println("------------ deployer2 ------------")
 
+	// 打印 Docker 版本
 	_ = cmds.DockerVersion()
 
-	var m Manifest
+	// 加载本地清单文件，即 deployer.yml
+	var manifest Manifest
 	log.Printf("清单文件: %s", optManifest)
-	if m, err = LoadManifestFile(optManifest); err != nil {
+	if err = LoadManifestFile(optManifest, &manifest); err != nil {
 		return
 	}
 
+	// 加载本地清单文件中对应的 Profile
 	log.Printf("使用环境: %s", optProfile)
-	f := m.Profile(optProfile)
+	var profile Profile
+	if profile, err = manifest.Profile(optProfile); err != nil {
+		return
+	}
+	// 如果命令行指定了 --mem 和 --cpu，覆盖 Profile 文件中的设置
+	if !optCPU.IsZero() {
+		profile.Resource.CPU = &optCPU
+	}
+	if !optMEM.IsZero() {
+		profile.Resource.MEM = &optMEM
+	}
 	var fileBuild, filePackage string
-	if fileBuild, filePackage, err = f.GenerateFiles(); err != nil {
+	if fileBuild, filePackage, err = profile.GenerateFiles(); err != nil {
 		return
 	}
 	log.Printf("写入构建文件: %s", fileBuild)
 	log.Printf("写入打包文件: %s", filePackage)
 
+	// 执行构建脚本
 	log.Println("------------ 构建 ------------")
 	if err = cmds.Execute(fileBuild); err != nil {
 		return
 	}
 	log.Println("构建完成")
 
+	// 执行打包脚本，即 docker build
 	log.Println("------------ 打包 ------------")
 	if err = cmds.DockerBuild(filePackage, imageNames.Primary()); err != nil {
 		return
 	}
-
 	log.Printf("打包完成: %s", imageNames.Primary())
 
+	// 追踪涉及到的所有临时镜像，用来做事后清理
 	imageTracker.Add(imageNames.Primary())
 	defer imageTracker.DeleteAll()
 
-	// 执行推送/部署流程
+	// 遍历所有 --workload 参数，执行推送/部署流程
 	for _, workload := range optWorkloads {
 		log.Printf("------------ 部署 [%s] ------------", workload.String())
 
-		var s Preset
-		if s, err = LoadPreset(workload.Cluster); err != nil {
+		// 加载集群预置文件
+		var preset Preset
+		if err = LoadPresetFromHome(workload.Cluster, &preset); err != nil {
 			if os.IsNotExist(err) {
 				log.Printf("无法找到集群预置文件 %s, 请确认 --workload 参数是否正确", workload.Cluster)
 			}
 			return
 		}
 
+		// 生成 .docker/config.json 和 kubeconfig 文件
 		var dcDir, kcFile string
-		if dcDir, kcFile, err = s.GenerateFiles(); err != nil {
+		if dcDir, kcFile, err = preset.GenerateFiles(); err != nil {
 			return
 		}
 
+		// 打印 kubernetes 集群版本
 		_ = cmds.KubectlVersion(kcFile)
 
-		remoteImageNames := imageNames.Derive(s.Registry)
+		// 使用指定的远程镜像仓库地址
+		remoteImageNames := imageNames.Derive(preset.Registry)
 
+		// 推送镜像到远程仓库
 		for _, remoteImageName := range remoteImageNames {
 			log.Printf("推送镜像: %s", remoteImageName)
 			if err = cmds.DockerTag(imageNames.Primary(), remoteImageName); err != nil {
@@ -146,68 +163,14 @@ func main() {
 			continue
 		}
 
-		// 构建 Patch
-		var p UniversalPatch
-		p.Metadata.Annotations = s.Annotations
-		if p.Metadata.Annotations == nil {
-			p.Metadata.Annotations = map[string]string{}
-		}
-		if p.Spec.Template.Annotations == nil {
-			p.Spec.Template.Annotations = map[string]string{}
-		}
-		p.Spec.Template.Annotations["net.guoyk.deployer/timestamp"] = time.Now().Format(time.RFC3339)
-		for _, name := range s.ImagePullSecrets {
-			secret := corev1.LocalObjectReference{Name: strings.TrimSpace(name)}
-			p.Spec.Template.Spec.ImagePullSecrets = append(p.Spec.Template.Spec.ImagePullSecrets, secret)
-		}
-		if workload.IsInit {
-			container := corev1.Container{
-				Image:           remoteImageNames.Primary(),
-				Name:            workload.Container,
-				ImagePullPolicy: "Always",
-			}
-			p.Spec.Template.Spec.InitContainers = append(p.Spec.Template.Spec.InitContainers, container)
-		} else {
-			container := corev1.Container{
-				Image:           remoteImageNames.Primary(),
-				Name:            workload.Container,
-				ImagePullPolicy: "Always",
-			}
-			if container.Resources.Requests == nil {
-				container.Resources.Requests = map[corev1.ResourceName]resource.Quantity{}
-			}
-			if container.Resources.Limits == nil {
-				container.Resources.Limits = map[corev1.ResourceName]resource.Quantity{}
-			}
-			cpu, mem := s.CPU, s.MEM
-			if f.CPU != nil {
-				cpu = f.CPU
-			}
-			if f.MEM != nil {
-				mem = f.MEM
-			}
-			if !optCPU.IsZero() {
-				cpu = &optCPU
-			}
-			if !optMEM.IsZero() {
-				mem = &optMEM
-			}
-			if cpu != nil {
-				container.Resources.Requests[corev1.ResourceCPU],
-					container.Resources.Limits[corev1.ResourceCPU] = cpu.AsCPU()
-			}
-			if mem != nil {
-				container.Resources.Requests[corev1.ResourceMemory],
-					container.Resources.Limits[corev1.ResourceMemory] = mem.AsMEM()
-			}
-			p.Spec.Template.Spec.Containers = append(p.Spec.Template.Spec.Containers, container)
-		}
+		// 构建工作负载补丁
+		patch := CreateUniversalPatch(&preset, &profile, &workload, remoteImageNames.Primary())
 
+		// 执行 kubectl patch 命令，更新工作负载
 		var buf []byte
-		if buf, err = json.MarshalIndent(p, "", "  "); err != nil {
+		if buf, err = json.MarshalIndent(patch, "", "  "); err != nil {
 			return
 		}
-
 		if err = cmds.KubectlPatch(kcFile, workload.Namespace, workload.Name, workload.Type, string(buf)); err != nil {
 			return
 		}

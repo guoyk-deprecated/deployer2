@@ -11,35 +11,12 @@ import (
 )
 
 type Profile struct {
-	Profile string                 `yaml:"-"`
-	CPU     *LimitOption           `yaml:"cpu"`
-	MEM     *LimitOption           `yaml:"mem"`
-	Build   []string               `yaml:"build"`
-	Package []string               `yaml:"package"`
-	Vars    map[string]interface{} `yaml:"vars"`
-}
-
-func (p *Profile) Apply(dp Profile) {
-	if len(p.Build) == 0 {
-		p.Build = dp.Build
-	}
-	if len(p.Package) == 0 {
-		p.Package = dp.Package
-	}
-	if p.CPU == nil {
-		p.CPU = dp.CPU
-	}
-	if p.MEM == nil {
-		p.MEM = dp.MEM
-	}
-	vars := make(map[string]interface{})
-	for k, v := range dp.Vars {
-		vars[k] = v
-	}
-	for k, v := range p.Vars {
-		vars[k] = v
-	}
-	p.Vars = vars
+	Profile  string                 `yaml:"-"`
+	Resource UniversalResourceList  `yaml:"resource"`
+	Check    UniversalCheck         `yaml:"check"`
+	Build    []string               `yaml:"build"`
+	Package  []string               `yaml:"package"`
+	Vars     map[string]interface{} `yaml:"vars"`
 }
 
 func (p *Profile) Render(src string) (out []byte, err error) {
