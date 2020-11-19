@@ -3,7 +3,8 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"gopkg.in/yaml.v3"
+	"github.com/guoyk93/tempfile"
+	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"log"
 	"os"
@@ -12,16 +13,12 @@ import (
 
 type Preset struct {
 	Registry         string                 `yaml:"registry"`
+	Annotations      map[string]string      `yaml:"annotations"`
 	ImagePullSecrets []string               `yaml:"imagePullSecrets"`
-	LimitsCPU        string                 `yaml:"limitsCPU"`
-	LimitsMEM        string                 `yaml:"limitsMEM"`
-	RequestsCPU      string                 `yaml:"requestsCPU"`
-	RequestsMEM      string                 `yaml:"requestsMEM"`
-	ExtraAnnotations map[string]string      `yaml:"extra_annotations"`
+	CPU              *LimitOption           `yaml:"cpu"`
+	MEM              *LimitOption           `yaml:"mem"`
 	Kubeconfig       map[string]interface{} `yaml:"kubeconfig"`
-	Dockerconfig     *struct {
-		Auths map[string]map[string]string `json:"auths" yaml:"auths"`
-	} `yaml:"dockerconfig"`
+	Dockerconfig     map[string]interface{} `yaml:"dockerconfig"`
 }
 
 func LoadPreset(cluster string) (p Preset, err error) {
@@ -30,7 +27,7 @@ func LoadPreset(cluster string) (p Preset, err error) {
 		err = errors.New("缺少环境变量 $HOME")
 		return
 	}
-	filename := filepath.Join(home, ".deployer", "preset-"+cluster+".yml")
+	filename := filepath.Join(home, ".deployer2", "preset-"+cluster+".yml")
 	log.Printf("加载集群配置: %s", filename)
 	var buf []byte
 	if buf, err = ioutil.ReadFile(filename); err != nil {
@@ -60,4 +57,27 @@ func (p Preset) GenerateDockerconfig() []byte {
 		panic(err)
 	}
 	return buf
+}
+
+func (p Preset) GenerateFiles() (kcFile string, dcDir string, err error) {
+	var dcFile string
+	if dcDir, dcFile, err = tempfile.WriteDirFile(
+		p.GenerateDockerconfig(),
+		"deployer-dockerconfig",
+		"config.json",
+		false,
+	); err != nil {
+		return
+	}
+	log.Printf("生成 Docker 配置文件: %s", dcFile)
+	if kcFile, err = tempfile.WriteFile(
+		p.GenerateKubeconfig(),
+		"deployer-kubeconfig",
+		".yml",
+		false,
+	); err != nil {
+		return
+	}
+	log.Printf("生成 Kubeconfig 文件: %s", kcFile)
+	return
 }

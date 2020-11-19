@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
-	"fmt"
+	"github.com/guoyk93/deployer2/pkg/cmds"
+	"github.com/guoyk93/deployer2/pkg/image_tracker"
 	"github.com/guoyk93/tempfile"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"log"
 	"os"
 	"strings"
@@ -38,8 +41,8 @@ func main() {
 		optMEM        LimitOption
 		optSkipDeploy bool
 
-		imageNames     ImageNames
-		usedImageNames ImageNames
+		imageNames   ImageNames
+		imageTracker = image_tracker.New()
 	)
 
 	flag.StringVar(&optManifest, "manifest", "deployer.yml", "指定描述文件")
@@ -74,6 +77,8 @@ func main() {
 
 	log.Println("------------ deployer2 ------------")
 
+	_ = cmds.DockerVersion()
+
 	var m Manifest
 	log.Printf("清单文件: %s", optManifest)
 	if m, err = LoadManifestFile(optManifest); err != nil {
@@ -81,33 +86,29 @@ func main() {
 	}
 
 	log.Printf("使用环境: %s", optProfile)
+	f := m.Profile(optProfile)
 	var fileBuild, filePackage string
-	if fileBuild, filePackage, err = m.Profile(optProfile).GenerateFiles(); err != nil {
+	if fileBuild, filePackage, err = f.GenerateFiles(); err != nil {
 		return
 	}
 	log.Printf("写入构建文件: %s", fileBuild)
 	log.Printf("写入打包文件: %s", filePackage)
 
 	log.Println("------------ 构建 ------------")
-	if err = Execute(fileBuild); err != nil {
+	if err = cmds.Execute(fileBuild); err != nil {
 		return
 	}
 	log.Println("构建完成")
 
 	log.Println("------------ 打包 ------------")
-	if err = ExecuteDockerBuild(filePackage, imageNames.Primary()); err != nil {
+	if err = cmds.DockerBuild(filePackage, imageNames.Primary()); err != nil {
 		return
 	}
 
 	log.Printf("打包完成: %s", imageNames.Primary())
-	usedImageNames = append(usedImageNames, imageNames.Primary())
 
-	defer func() {
-		log.Printf("清理镜像")
-		for _, imageName := range usedImageNames {
-			_ = ExecuteDockerRemoveImage(imageName)
-		}
-	}()
+	imageTracker.Add(imageNames.Primary())
+	defer imageTracker.DeleteAll()
 
 	// 执行推送/部署流程
 	for _, workload := range optWorkloads {
@@ -121,29 +122,22 @@ func main() {
 			return
 		}
 
-		fullImageNames := imageNames.Derive(s.Registry)
-
-		var dcDir, dcFile string
-		if dcDir, dcFile, err = tempfile.WriteDirFile(
-			s.GenerateDockerconfig(),
-			"deployer-dockerconfig",
-			"config.json",
-			false,
-		); err != nil {
+		var dcDir, kcFile string
+		if dcDir, kcFile, err = s.GenerateFiles(); err != nil {
 			return
 		}
-		log.Printf("生成 Docker 配置文件: %s", dcFile)
 
-		for _, fullImageName := range fullImageNames {
-			log.Printf("推送镜像: %s", fullImageName)
+		_ = cmds.KubectlVersion(kcFile)
 
-			if err = ExecuteDockerTag(imageNames.Primary(), fullImageName); err != nil {
+		remoteImageNames := imageNames.Derive(s.Registry)
+
+		for _, remoteImageName := range remoteImageNames {
+			log.Printf("推送镜像: %s", remoteImageName)
+			if err = cmds.DockerTag(imageNames.Primary(), remoteImageName); err != nil {
 				return
 			}
-
-			usedImageNames = append(usedImageNames, fullImageName)
-
-			if err = ExecuteDockerPush(fullImageName, dcDir); err != nil {
+			imageTracker.Add(remoteImageName)
+			if err = cmds.DockerPush(remoteImageName, dcDir); err != nil {
 				return
 			}
 		}
@@ -152,54 +146,69 @@ func main() {
 			continue
 		}
 
-		var fileKubeconfig string
-		if fileKubeconfig, err = tempfile.WriteFile(s.GenerateKubeconfig(), "deployer-kubeconfig", ".yml", false); err != nil {
-			return
-		}
-		log.Printf("生成 Kubeconfig 文件: %s", fileKubeconfig)
-
 		// 构建 Patch
-		var p Patch
-		p.Metadata.Annotations = s.ExtraAnnotations
-		p.Spec.Template.Metadata.Annotations.Timestamp = time.Now().Format(time.RFC3339)
+		var p UniversalPatch
+		p.Metadata.Annotations = s.Annotations
+		if p.Metadata.Annotations == nil {
+			p.Metadata.Annotations = map[string]string{}
+		}
+		if p.Spec.Template.Annotations == nil {
+			p.Spec.Template.Annotations = map[string]string{}
+		}
+		p.Spec.Template.Annotations["net.guoyk.deployer/timestamp"] = time.Now().Format(time.RFC3339)
 		for _, name := range s.ImagePullSecrets {
-			secret := PatchImagePullSecret{Name: strings.TrimSpace(name)}
+			secret := corev1.LocalObjectReference{Name: strings.TrimSpace(name)}
 			p.Spec.Template.Spec.ImagePullSecrets = append(p.Spec.Template.Spec.ImagePullSecrets, secret)
 		}
 		if workload.IsInit {
-			container := PatchInitContainer{
-				Image:           fullImageNames.Primary(),
+			container := corev1.Container{
+				Image:           remoteImageNames.Primary(),
 				Name:            workload.Container,
 				ImagePullPolicy: "Always",
 			}
 			p.Spec.Template.Spec.InitContainers = append(p.Spec.Template.Spec.InitContainers, container)
 		} else {
-			container := PatchContainer{
-				Image:           fullImageNames.Primary(),
+			container := corev1.Container{
+				Image:           remoteImageNames.Primary(),
 				Name:            workload.Container,
 				ImagePullPolicy: "Always",
 			}
-			container.Resources.Requests.CPU = s.RequestsCPU
-			container.Resources.Requests.Memory = s.RequestsMEM
-			container.Resources.Limits.CPU = s.LimitsCPU
-			container.Resources.Limits.Memory = s.LimitsMEM
+			if container.Resources.Requests == nil {
+				container.Resources.Requests = map[corev1.ResourceName]resource.Quantity{}
+			}
+			if container.Resources.Limits == nil {
+				container.Resources.Limits = map[corev1.ResourceName]resource.Quantity{}
+			}
+			cpu, mem := s.CPU, s.MEM
+			if f.CPU != nil {
+				cpu = f.CPU
+			}
+			if f.MEM != nil {
+				mem = f.MEM
+			}
 			if !optCPU.IsZero() {
-				container.Resources.Requests.CPU = fmt.Sprintf("%dm", optCPU.Min)
-				container.Resources.Limits.CPU = fmt.Sprintf("%dm", optCPU.Max)
+				cpu = &optCPU
 			}
 			if !optMEM.IsZero() {
-				container.Resources.Requests.Memory = fmt.Sprintf("%dMi", optMEM.Min)
-				container.Resources.Limits.Memory = fmt.Sprintf("%dMi", optMEM.Max)
+				mem = &optMEM
+			}
+			if cpu != nil {
+				container.Resources.Requests[corev1.ResourceCPU],
+					container.Resources.Limits[corev1.ResourceCPU] = cpu.AsCPU()
+			}
+			if mem != nil {
+				container.Resources.Requests[corev1.ResourceMemory],
+					container.Resources.Limits[corev1.ResourceMemory] = mem.AsMEM()
 			}
 			p.Spec.Template.Spec.Containers = append(p.Spec.Template.Spec.Containers, container)
 		}
 
 		var buf []byte
-		if buf, err = json.Marshal(p); err != nil {
+		if buf, err = json.MarshalIndent(p, "", "  "); err != nil {
 			return
 		}
 
-		if err = ExecuteKubectlPatch(fileKubeconfig, workload.Namespace, workload.Name, workload.Type, string(buf)); err != nil {
+		if err = cmds.KubectlPatch(kcFile, workload.Namespace, workload.Name, workload.Type, string(buf)); err != nil {
 			return
 		}
 	}
