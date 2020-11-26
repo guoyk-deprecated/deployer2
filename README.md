@@ -1,3 +1,5 @@
+**代码已经迁移至 https://github.com/acicn/deployer2**
+
 # deployer2
 
 `deployer` 的船新版本
