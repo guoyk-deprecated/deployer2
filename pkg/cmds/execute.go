@@ -71,12 +71,22 @@ func ExecuteInDocker(image string, cacheDir string, caches []string, script stri
 
 	// 准备 stdin
 	buf := &bytes.Buffer{}
-	_, _ = fmt.Fprintf(buf, "#!/bin/bash\n")
-	_, _ = fmt.Fprintf(buf, "set -eux\n")
-	_, _ = fmt.Fprintf(buf, "cd '%s'\n", InDockerWorkspace)
-	_, _ = fmt.Fprintf(buf, "chmod +x '%s'\n", InDockerScript)
-	_, _ = fmt.Fprintf(buf, "'%s'\n", InDockerScript)
-	_, _ = fmt.Fprintf(buf, "chown -R %d:%d '%s'\n", os.Getuid(), os.Getgid(), InDockerWorkspace)
+
+	_, _ = fmt.Fprintf(buf, `#!/bin/bash
+set -eux
+cleanup() {
+  %s
+}
+trap cleanup EXIT
+cd '%s'
+chmod +x '%s'
+'%s'
+`,
+		fmt.Sprintf("chown -R %d:%d '%s'", os.Getuid(), os.Getgid(), InDockerWorkspace),
+		InDockerWorkspace,
+		InDockerScript,
+		InDockerScript,
+	)
 
 	log.Println("使用镜像: ", image)
 	for _, mount := range mounts {
