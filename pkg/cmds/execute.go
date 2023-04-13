@@ -128,7 +128,7 @@ func DockerVersion() error {
 }
 
 func DockerBuild(dockerFile, imageName string) error {
-	return Execute("docker", "build", "-t", imageName, "-f", dockerFile, ".")
+	return Execute("docker", "build", "--network", "host", "-t", imageName, "-f", dockerFile, ".")
 }
 
 func DockerTag(imageName string, imageNameAlt string) error {
