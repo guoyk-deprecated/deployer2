@@ -16,7 +16,11 @@ type UniversalPatch struct {
 			Metadata struct {
 				Annotations map[string]string `json:"annotations,omitempty"`
 			} `json:"metadata,omitempty"`
-			Spec corev1.PodSpec `json:"spec,omitempty"`
+			Spec struct {
+				ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
+				InitContainers   []corev1.Container            `json:"initContainers,omitempty"`
+				Containers       []corev1.Container            `json:"containers,omitempty"`
+			} `json:"spec,omitempty"`
 		} `json:"template,omitempty"`
 	} `json:"spec,omitempty"`
 }
